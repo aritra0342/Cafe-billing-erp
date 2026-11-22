@@ -1,0 +1,6 @@
+# Secrets go to Vercel as environment variables, never in the uploaded source.
+.env
+.env.*
+node_modules
+.next
+.vercel

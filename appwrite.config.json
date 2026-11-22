@@ -1,0 +1,694 @@
+{
+  "projectId": "6aec6367002417f66538",
+  "endpoint": "https://sgp.cloud.appwrite.io/v1",
+  "tablesDB": [
+    {
+      "$id": "cafe",
+      "name": "Cafe Billing",
+      "enabled": true
+    }
+  ],
+  "tables": [
+    {
+      "$id": "settings",
+      "$permissions": [],
+      "databaseId": "cafe",
+      "name": "Settings",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        {
+          "key": "ownerId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "cafeName",
+          "type": "varchar",
+          "size": 128,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "legalName",
+          "type": "varchar",
+          "size": 128,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "address",
+          "type": "varchar",
+          "size": 512,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "city",
+          "type": "varchar",
+          "size": 64,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "pincode",
+          "type": "varchar",
+          "size": 10,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "stateCode",
+          "type": "varchar",
+          "size": 2,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "phone",
+          "type": "varchar",
+          "size": 20,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "email",
+          "type": "varchar",
+          "size": 128,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "gstin",
+          "type": "varchar",
+          "size": 15,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "fssai",
+          "type": "varchar",
+          "size": 14,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "taxMode",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "regular",
+            "composition",
+            "unregistered"
+          ],
+          "required": false,
+          "array": false,
+          "default": "regular"
+        },
+        {
+          "key": "gstRate",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "min": 0,
+          "max": 28,
+          "default": 5
+        },
+        {
+          "key": "pricesIncludeTax",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": false
+        },
+        {
+          "key": "invoicePrefix",
+          "type": "varchar",
+          "size": 12,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "upiId",
+          "type": "varchar",
+          "size": 64,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "footerNote",
+          "type": "varchar",
+          "size": 512,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "defaultTemplate",
+          "type": "varchar",
+          "size": 32,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "accentColor",
+          "type": "varchar",
+          "size": 9,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "logo",
+          "type": "mediumtext",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "$id": "categories",
+      "$permissions": [],
+      "databaseId": "cafe",
+      "name": "Menu categories",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        {
+          "key": "ownerId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "name",
+          "type": "varchar",
+          "size": 64,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "sortOrder",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": 0
+        }
+      ],
+      "indexes": [
+        {
+          "key": "by_owner",
+          "type": "key",
+          "columns": [
+            "ownerId",
+            "sortOrder"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "items",
+      "$permissions": [],
+      "databaseId": "cafe",
+      "name": "Menu items",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        {
+          "key": "ownerId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "categoryId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "name",
+          "type": "varchar",
+          "size": 128,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "description",
+          "type": "varchar",
+          "size": 512,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "price",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "min": 0,
+          "default": 0
+        },
+        {
+          "key": "diet",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "veg",
+            "nonveg",
+            "egg"
+          ],
+          "required": false,
+          "array": false,
+          "default": "veg"
+        },
+        {
+          "key": "available",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": true
+        },
+        {
+          "key": "variants",
+          "type": "text",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "addons",
+          "type": "text",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "sortOrder",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "photo",
+          "type": "varchar",
+          "size": 36,
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "by_owner",
+          "type": "key",
+          "columns": [
+            "ownerId",
+            "categoryId"
+          ],
+          "orders": [
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "invoices",
+      "$permissions": [],
+      "databaseId": "cafe",
+      "name": "Invoices",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        {
+          "key": "ownerId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "number",
+          "type": "varchar",
+          "size": 32,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "fy",
+          "type": "varchar",
+          "size": 7,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "seq",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "min": 1
+        },
+        {
+          "key": "issuedAt",
+          "type": "datetime",
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "customerName",
+          "type": "varchar",
+          "size": 128,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "customerPhone",
+          "type": "varchar",
+          "size": 20,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "customerGstin",
+          "type": "varchar",
+          "size": 15,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "customerAddress",
+          "type": "varchar",
+          "size": 512,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "orderType",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "dine_in",
+            "takeaway",
+            "delivery"
+          ],
+          "required": false,
+          "array": false,
+          "default": "dine_in"
+        },
+        {
+          "key": "tableNo",
+          "type": "varchar",
+          "size": 16,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "paymentMode",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "cash",
+            "upi",
+            "card",
+            "other"
+          ],
+          "required": false,
+          "array": false,
+          "default": "cash"
+        },
+        {
+          "key": "templateId",
+          "type": "varchar",
+          "size": 32,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "lines",
+          "type": "text",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "discountType",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "percent",
+            "flat"
+          ],
+          "required": false,
+          "array": false,
+          "default": "flat"
+        },
+        {
+          "key": "discountValue",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "min": 0,
+          "default": 0
+        },
+        {
+          "key": "subtotal",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "discount",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "taxable",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "cgst",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "sgst",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "roundOff",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "total",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": 0
+        },
+        {
+          "key": "taxMode",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "regular",
+            "composition",
+            "unregistered"
+          ],
+          "required": false,
+          "array": false,
+          "default": "regular"
+        },
+        {
+          "key": "gstRate",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "min": 0,
+          "max": 28,
+          "default": 5
+        },
+        {
+          "key": "business",
+          "type": "text",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "notes",
+          "type": "varchar",
+          "size": 512,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "status",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "due",
+            "paid"
+          ],
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "paidAt",
+          "type": "datetime",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "pricesIncludeTax",
+          "type": "boolean",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "uniq_number",
+          "type": "unique",
+          "columns": [
+            "ownerId",
+            "fy",
+            "seq"
+          ],
+          "orders": [
+            "ASC",
+            "ASC",
+            "ASC"
+          ]
+        },
+        {
+          "key": "by_date",
+          "type": "key",
+          "columns": [
+            "ownerId",
+            "issuedAt"
+          ],
+          "orders": [
+            "ASC",
+            "DESC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "invoice_events",
+      "$permissions": [],
+      "databaseId": "cafe",
+      "name": "Invoice history",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        {
+          "key": "ownerId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "invoiceId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "type",
+          "type": "string",
+          "format": "enum",
+          "elements": [
+            "layout",
+            "items",
+            "status"
+          ],
+          "required": false,
+          "array": false,
+          "default": "layout"
+        },
+        {
+          "key": "from",
+          "type": "varchar",
+          "size": 32,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "to",
+          "type": "varchar",
+          "size": 32,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "at",
+          "type": "datetime",
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "detail",
+          "type": "text",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "by_invoice",
+          "type": "key",
+          "columns": [
+            "ownerId",
+            "invoiceId",
+            "at"
+          ],
+          "orders": [
+            "ASC",
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    }
+  ],
+  "buckets": [
+    {
+      "$id": "item-photos",
+      "$permissions": [],
+      "fileSecurity": false,
+      "name": "Menu item photos",
+      "enabled": true,
+      "maximumFileSize": 1000000,
+      "allowedFileExtensions": [
+        "webp",
+        "jpg",
+        "jpeg",
+        "png"
+      ],
+      "compression": "none",
+      "encryption": true,
+      "antivirus": true
+    }
+  ]
+}
