@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getInvoice, getMenu, getSettings, linesRevision } from "@/lib/data";
+import { paidByLabel } from "@/lib/billing";
 import { BillingCounter } from "@/components/billing-counter";
 import { ButtonLink, EmptyState, Skeleton } from "@/components/ui";
 
@@ -51,6 +52,7 @@ async function EditBill({ params }: Pick<PageProps<"/invoices/[id]/edit">, "para
           number: bill.number,
           status: bill.status,
           paymentMode: bill.paymentMode,
+          paidBy: paidByLabel(bill),
           lines: bill.lines,
           customerName: bill.customerName,
           customerPhone: bill.customerPhone,

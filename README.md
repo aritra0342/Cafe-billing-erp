@@ -79,13 +79,27 @@ On thermal rolls, the page height is measured at print time so the printer doesn
 This follows how Indian POS systems handle a KOT (kitchen order ticket): the kitchen gets its ticket as soon as the order is taken, and the bill is settled afterwards.
 
 1. Tap items on the counter. Dine-in orders need a **table number**; the bill won't save without one, on screen or on the server.
-2. **Payment** is **Due** by default. Choose **Paid** (then UPI, cash, card or other) only if the guest pays up front.
+2. **Payment** is **Due** by default. Choose **Paid** (then UPI, cash, card, mixed or other) only if the guest pays up front.
 3. **Save and print kitchen slip** saves the bill and opens it with the kitchen slip already printing. **Save without a kitchen slip** is there for takeaway orders that need no cooking.
-4. When the guest pays, open the bill (Today lists due bills in red) and tap **Mark paid by** UPI, cash, card or other. A wrong tap can be undone with **Mark as due**. Both are recorded in the bill's history.
+4. When the guest pays, open the bill (Today lists due bills in red) and tap **Mark paid by** UPI, cash, card, other or **Mixed**. A wrong tap can be undone with **Mark as due**. Both are recorded in the bill's history.
 
 Bills saved before paid/due existed count as paid. The printed bill says "Payment due" (DUE on receipts) until it's paid.
 
 **Kitchen slip.** No prices: the order number in large type (the last part of the bill number, so INV/26-27/0042 is order 42), dine-in table or takeaway, date and time, and each item with its quantity, size, add-ons and notes. It prints on an 80 mm roll, or 58 mm when the bill's layout is the 58 mm receipt. Reprint it any time from the bill's **Kitchen slip** button.
+
+**Mixed payment.** For a bill paid partly one way and partly another, choose **Mixed** and type the amounts for cash, UPI and card. One field (UPI at first, shown with a dashed border) isn't typed: it always holds the rest of the bill, so the parts add up. Typing in that field hands the job to another one. The server checks the parts equal the total. The bill, the ledger and the history show "Cash ₹200 + UPI ₹150"; the amounts are saved in `invoices.paymentSplit`. If a paid mixed bill is edited and its total changes, the cash part takes the difference (`rebalanceSplit` in `lib/billing.ts`).
+
+## Expenses
+
+**Expenses** is a sheet per day (IST). The first line is the day's collection: paid bills made that day, split by cash, UPI and card. Each expense below it has what it was for, the amount, and a **Balance left** column that carries down the sheet, ending in "Left after expenses". Use the arrows or the date box to write expenses for an earlier day. Today's page shows the day's expenses and what's left.
+
+## Reports
+
+**Reports → Collection** shows cash, UPI, card and the total collected for a week (Monday to Sunday), a month or a year, with arrows for earlier periods and a box for any dates. The year is the financial year, April to March, like the bill numbers. Below is a table day by day (month by month for a year) with expenses and what was left. A bill counts on the day it was made, once it's paid; a mixed bill adds each part to its own column.
+
+**Reports → Items sold** lists every item with how many went out and for how much, for a day, week, month, year or any dates. Search an item ("water") to see its count; open it for the count on each date. It counts all bills, paid or due, by the item name on the bill.
+
+To keep reads low, each finished day is added up once and kept as one row in `day_totals` (`lib/reports.ts`). A report reads those rows and goes back to the bills only for today and for days with no row yet. Any action that changes a past day's bill or expense must call `dayChanged(userId, day)` before and after the write, which deletes that day's row. "Add them up again from the bills" under the Collection table clears the kept rows for the dates shown.
 
 ## Editing a bill
 
@@ -107,7 +121,7 @@ On the Menu page, **Download menu** gives an .xlsx with one row per item: Catego
 
 On Today and on the Bills page, paid bills are on a green line with how they were paid, and due bills on a red one. Today's header splits the day into money collected and money still due, and "Takings by payment" counts paid bills only, so it matches the cash drawer.
 
-The Bills page filters by search and by IST date range, with Today, This month, Last month and This financial year as shortcuts. When a date range is set, it shows the takings and GST for that range. **Download CSV** exports the bills matching the current filters, oldest first, one row per bill. Each row has the invoice number, date (dd-mm-yyyy), document type, customer GSTIN, place of supply, status (Paid or Due), payment mode, taxable value, GST rate, CGST, SGST, round off and total. The CSV route is `/invoices/export?from=YYYY-MM-DD&to=YYYY-MM-DD&q=…` and returns at most 50,000 bills.
+The Bills page filters by search and by IST date range, with Today, This month, Last month and This financial year as shortcuts. When a date range is set, it shows the takings and GST for that range. **Download CSV** exports the bills matching the current filters, oldest first, one row per bill. Each row has the invoice number, date (dd-mm-yyyy), document type, customer GSTIN, place of supply, status (Paid or Due), payment mode, the amounts paid in cash, by UPI, by card and other, taxable value, GST rate, CGST, SGST, round off and total. The CSV route is `/invoices/export?from=YYYY-MM-DD&to=YYYY-MM-DD&q=…` and returns at most 50,000 bills.
 
 ## Caveats
 
@@ -115,4 +129,5 @@ The Bills page filters by search and by IST date range, with Today, This month, 
 - One GST rate per café. That's right for a standalone café (5%). Items taxed differently, such as packaged MRP goods, aren't modelled per item.
 - The dashboard's "today" stats scan up to 5,000 bills.
 - Appwrite pauses free projects that see no requests for a while, and the whole site stops loading data until it's restored from the Appwrite console. To prevent that, Vercel Cron calls `/api/keep-alive` once a day at 09:00 IST (`vercel.json`), which makes one tiny read. It needs a `CRON_SECRET` environment variable on Vercel; Vercel sends it as a bearer token and any other request gets a 401.
+- Appwrite bills database reads per row returned, so the app is built to read little. Links don't prefetch (`components/link.tsx`, and `partialPrefetching` is off in `next.config.ts`): every page reads the signed-in café's data, so each prefetch rendered the whole destination page on the server, and a navigation rendered twice. The menu and café settings are cached per café (`lib/data.ts`) and cleared by the menu and settings actions through `lib/cache-tags.ts`; bills are always read live. Import links from `@/components/link`, not `next/link`, and call `menuChanged()` or `settingsChanged()` from any new action that edits the menu or settings.
 - Editing changes an issued bill in place. That's fine for an order still at the table. Once a bill has gone to a business customer for their GST input credit, correct it with a credit note instead (not built yet).

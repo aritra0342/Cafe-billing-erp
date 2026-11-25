@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/link";
 import { useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createInvoice, updateInvoice } from "@/lib/actions/invoices";
 import {
@@ -8,7 +8,6 @@ import {
   formatINR,
   GSTIN_RE,
   lineUnitPrice,
-  PAYMENT_LABEL,
   type BilledLine,
   type CartLineInput,
   type Category,
@@ -23,6 +22,7 @@ import {
 import { TEMPLATES } from "@/lib/templates";
 import { Button, DietMark, Field, Input, Segmented, Select, Textarea, buttonClass } from "./ui";
 import { IconClose, IconMinus, IconPlus, IconSearch } from "./icons";
+import { NEW_SPLIT, SplitFields, splitParts } from "./split-fields";
 
 type CartLine = {
   key: string;
@@ -43,6 +43,8 @@ export type EditingBill = {
   number: string;
   status: PaymentStatus;
   paymentMode: PaymentMode;
+  /** How the bill was paid, in words: "UPI", or "Cash ₹200 + UPI ₹150" for a mixed payment. */
+  paidBy: string;
   lines: BilledLine[];
   customerName: string;
   customerPhone: string;
@@ -109,6 +111,7 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
   // New bills start as due: the order goes to the kitchen first and is settled later.
   const [status, setStatus] = useState<PaymentStatus>("due");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("upi");
+  const [split, setSplit] = useState(NEW_SPLIT);
   const [discountType, setDiscountType] = useState<DiscountType>(editing?.discountType ?? "percent");
   const [discountValue, setDiscountValue] = useState(editing?.discountValue ?? 0);
   const [templateId, setTemplateId] = useState(config.defaultTemplate);
@@ -197,6 +200,8 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
   const taxed = config.taxMode === "regular" && config.gstRate > 0;
 
   const tableMissing = orderType === "dine_in" && !tableNo.trim();
+  const mixed = !editing && status === "paid" && paymentMode === "mixed";
+  const splitOver = mixed && splitParts(split, totals.total).over > 0;
 
   const save = (printSlip: boolean) => {
     setError("");
@@ -219,7 +224,7 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
     };
     start(async () => {
       saved.current = true;
-      const r = editing ? await updateInvoice(editing.id, { ...order, basedOn: editing.revision }) : await createInvoice({ ...order, status, paymentMode, templateId, printSlip });
+      const r = editing ? await updateInvoice(editing.id, { ...order, basedOn: editing.revision }) : await createInvoice({ ...order, status, paymentMode, ...(mixed ? { paymentSplit: splitParts(split, totals.total).parts } : {}), templateId, printSlip });
       if (r?.error) {
         saved.current = false;
         setError(r.error);
@@ -233,8 +238,8 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
       <section aria-label="Menu" className="min-w-0">
         <div className="sticky top-14 z-10 -mx-4 grid gap-3 bg-bg/95 px-4 pt-1 pb-3 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:top-16 lg:mx-0 lg:px-0">
           <div className="relative">
-            <IconSearch className="pointer-events-none absolute top-1/2 left-3.5 size-[1.125rem] -translate-y-1/2 text-ink-3" />
-            <Input type="search" placeholder="Find an item" aria-label="Find an item on the menu" className="h-12 pl-10 text-[1.0625rem]" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <IconSearch className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-ink-3" />
+            <Input type="search" placeholder="Find an item" aria-label="Find an item on the menu" className="h-14 pl-11 text-[1.1875rem]" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <div className="-mx-1 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="Categories">
             {[{ id: "all", name: "Whole menu" }, ...categories].map((c) => (
@@ -244,7 +249,7 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
                 role="tab"
                 aria-selected={cat === c.id}
                 onClick={() => setCat(c.id)}
-                className={`press h-10 shrink-0 rounded-md px-3.5 text-[0.9375rem] font-[560] ${cat === c.id ? "bg-ink text-bg" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}
+                className={`press h-12 shrink-0 rounded-lg px-4 text-[1.0625rem] font-[600] ${cat === c.id ? "bg-ink text-bg" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}
               >
                 {c.name}
               </button>
@@ -258,8 +263,9 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
           <div className="mt-4">
             {sections.map(({ cat: c, items: list }) => (
               <section key={c.id} className="mb-8">
-                <h2 className="mb-3 border-b-2 border-rule pb-1.5 text-[1.5rem] leading-tight font-[720] [font-stretch:78%]">{c.name}</h2>
-                <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))]">
+                <h2 className="mb-3 border-b-2 border-rule pb-1.5 text-[1.625rem] leading-tight font-[720] [font-stretch:78%]">{c.name}</h2>
+                {/* Big tiles: at a busy counter they're hit fast, with a thumb, from arm's length. */}
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
                   {list.map((item) => {
                     const n = qtyOf(item.id);
                     const options = item.variants.length > 0 || item.addons.length > 0;
@@ -270,7 +276,7 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
                           disabled={!item.available}
                           onClick={() => tapItem(item)}
                           aria-label={`${item.name}, ${priceLabel(item)}${options ? ", choose size" : ""}${n ? `, ${n} on bill` : ""}${item.available ? "" : ", sold out"}`}
-                          className={`press flex h-full min-h-[9rem] w-full flex-col rounded-xl border-2 px-3.5 pt-3 pb-[3.75rem] text-left transition-[border-color,background-color] disabled:cursor-not-allowed disabled:opacity-60 ${
+                          className={`press flex h-full min-h-[11.5rem] w-full flex-col rounded-xl border-2 px-4 pt-4 pb-[4.75rem] text-left transition-[border-color,background-color] disabled:cursor-not-allowed disabled:opacity-60 ${
                             n ? "border-accent bg-accent-soft" : "border-line bg-surface hover:border-ink-3 active:bg-accent-soft"
                           }`}
                         >
@@ -279,30 +285,30 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
                             <img src={`/menu/photo/${item.photo}`} alt="" loading="lazy" decoding="async" className="-mx-1 mb-2.5 aspect-[4/3] w-[calc(100%+0.5rem)] rounded-lg bg-surface-2 object-cover" />
                           )}
                           <span className="flex items-start gap-2">
-                            <DietMark diet={item.diet} className="mt-[0.4rem] shrink-0" />
-                            <span className={`line-clamp-2 text-[1.125rem] leading-snug font-[600] ${item.available ? "" : "text-ink-3 line-through decoration-bad/70"}`}>{item.name}</span>
+                            <DietMark diet={item.diet} className="mt-[0.5rem] shrink-0 sm:mt-[0.6rem]" />
+                            <span className={`line-clamp-3 text-[1.25rem] leading-[1.2] font-[650] sm:text-[1.4375rem] ${item.available ? "" : "text-ink-3 line-through decoration-bad/70"}`}>{item.name}</span>
                           </span>
                           <span className="mt-auto flex items-baseline justify-between gap-2 pt-2">
-                            {item.available ? <span className="money text-[1.25rem]">{priceLabel(item)}</span> : <span className="text-[0.9375rem] font-[600] text-bad">Sold out</span>}
-                            {options && item.available && <span className="text-[0.875rem] text-ink-3">Sizes</span>}
+                            {item.available ? <span className="money text-[1.5rem] sm:text-[1.625rem]">{priceLabel(item)}</span> : <span className="text-[1.0625rem] font-[650] text-bad">Sold out</span>}
+                            {options && item.available && <span className="text-[1rem] text-ink-3">Sizes</span>}
                           </span>
                           {!n && item.available && (
-                            <span aria-hidden className="absolute inset-x-2 bottom-2 flex h-11 items-center justify-center gap-1.5 rounded-lg border border-dashed border-line text-[0.9375rem] font-[600] text-ink-3">
-                              <IconPlus className="size-4" />
+                            <span aria-hidden className="absolute inset-x-2.5 bottom-2.5 flex h-[3.25rem] items-center justify-center gap-2 rounded-lg border border-dashed border-line text-[1.0625rem] font-[650] text-ink-3">
+                              <IconPlus className="size-5" />
                               Add
                             </span>
                           )}
                         </button>
                         {n > 0 && (
-                          <div className="absolute inset-x-2 bottom-2 flex h-11 items-center justify-between rounded-lg bg-accent text-accent-ink">
-                            <button type="button" aria-label={`One less ${item.name}`} onClick={() => lessOf(item.id)} className="press grid h-full w-12 place-items-center rounded-l-lg hover:bg-black/10">
-                              <IconMinus className="size-[1.125rem]" />
+                          <div className="absolute inset-x-2.5 bottom-2.5 flex h-[3.25rem] items-center justify-between rounded-lg bg-accent text-accent-ink">
+                            <button type="button" aria-label={`One less ${item.name}`} onClick={() => lessOf(item.id)} className="press grid h-full w-16 place-items-center rounded-l-lg hover:bg-black/10">
+                              <IconMinus className="size-6" />
                             </button>
-                            <span className="num text-[1.25rem] font-[700]" aria-live="polite" aria-label={`${n} ${item.name} on bill`}>
+                            <span className="num text-[1.625rem] font-[750]" aria-live="polite" aria-label={`${n} ${item.name} on bill`}>
                               {n}
                             </span>
-                            <button type="button" aria-label={`One more ${item.name}`} onClick={() => tapItem(item)} className="press grid h-full w-12 place-items-center rounded-r-lg hover:bg-black/10">
-                              <IconPlus className="size-[1.125rem]" />
+                            <button type="button" aria-label={`One more ${item.name}`} onClick={() => tapItem(item)} className="press grid h-full w-16 place-items-center rounded-r-lg hover:bg-black/10">
+                              <IconPlus className="size-6" />
                             </button>
                           </div>
                         )}
@@ -429,7 +435,7 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
 
           {editing ? (
             <p className={`rounded-lg px-3 py-2 ${editing.status === "due" ? "bg-bad/10 text-bad" : "bg-good/10 text-good"}`}>
-              {editing.status === "due" ? "This bill is due. Mark it paid from the bill once the guest settles it." : `This bill was paid by ${PAYMENT_LABEL[editing.paymentMode]}. If the total changes, collect or return the difference.`}
+              {editing.status === "due" ? "This bill is due. Mark it paid from the bill once the guest settles it." : `This bill was paid by ${editing.paidBy}. If the total changes, collect or return the difference${editing.paymentMode === "mixed" ? "; the cash part of the bill is changed to match" : ""}.`}
             </p>
           ) : (
             <div className="grid gap-1.5">
@@ -460,10 +466,12 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
                     { value: "upi", label: "UPI" },
                     { value: "cash", label: "Cash" },
                     { value: "card", label: "Card" },
+                    { value: "mixed", label: "Mixed" },
                     { value: "other", label: "Other" },
                   ]}
                 />
               )}
+              {mixed && <SplitFields className="mt-1" total={totals.total} value={split} onChange={setSplit} />}
             </div>
           )}
 
@@ -521,7 +529,7 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
           )}
           {editing ? (
             <div className="grid gap-2">
-              <Button variant="primary" size="lg" className="w-full" disabled={pending || cart.length === 0 || gstinInvalid} onClick={() => save(false)}>
+              <Button variant="primary" size="lg" className="w-full" disabled={pending || cart.length === 0 || gstinInvalid || splitOver} onClick={() => save(false)}>
                 {pending ? "Saving changes…" : `Save changes, ${formatINR(totals.total)}`}
               </Button>
               <p className="text-center text-[0.875rem] text-ink-2">Added and removed items print on a kitchen slip.</p>
@@ -532,10 +540,10 @@ function Counter({ categories, items, config, editing, onSavedAndHidden }: Count
           ) : (
             <div className="grid gap-2">
               {/* The kitchen gets its slip as soon as the order is taken; the bill itself prints when the guest pays. */}
-              <Button variant="primary" size="lg" className="w-full" disabled={pending || cart.length === 0 || gstinInvalid} onClick={() => save(true)}>
+              <Button variant="primary" size="lg" className="w-full" disabled={pending || cart.length === 0 || gstinInvalid || splitOver} onClick={() => save(true)}>
                 {pending ? "Saving bill…" : cart.length ? `Save and print kitchen slip, ${formatINR(totals.total)}` : "Save and print kitchen slip"}
               </Button>
-              <Button variant="secondary" className="w-full" disabled={pending || cart.length === 0 || gstinInvalid} onClick={() => save(false)}>
+              <Button variant="secondary" className="w-full" disabled={pending || cart.length === 0 || gstinInvalid || splitOver} onClick={() => save(false)}>
                 Save without a kitchen slip
               </Button>
             </div>

@@ -6,7 +6,9 @@ const nextConfig: NextConfig = {
     agentFeedback: true,
   },
   cacheComponents: true,
-  partialPrefetching: true,
+  // Off: every link opts out of prefetching (components/link.tsx), and with this on each navigation renders the
+  // page a second time to embed a prefetch copy, repeating its uncached Appwrite reads.
+  partialPrefetching: false,
   turbopack: {
     rules: {
       "*.css": {

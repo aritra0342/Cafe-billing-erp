@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getInvoice, getInvoiceHistory, getLogo, type BillEvent } from "@/lib/data";
 import { upiQr } from "@/lib/qr";
 import { getTemplate } from "@/lib/templates";
-import { formatINR, formatDate, formatDateTime, PAYMENT_LABEL, type LineChange, type PaymentMode } from "@/lib/billing";
+import { formatINR, formatDate, formatDateTime, paidByLabel, type LineChange, type PaymentMode, type PaymentSplit } from "@/lib/billing";
 import { InvoicePaper } from "@/components/invoice-templates";
 import { ChangeSlip, KitchenSlip } from "@/components/kitchen-slip";
 import { AutoPrintSlip, InvoiceActions, PaymentBar } from "@/components/invoice-actions";
@@ -49,7 +49,7 @@ async function InvoiceView({ params, searchParams }: Pick<PageProps<"/invoices/[
     ...doc.lines.map((l) => `${l.qty} x ${l.name}${l.variant ? ` (${l.variant})` : ""}: ${formatINR(l.amount)}`),
     "",
     `Total ${formatINR(doc.total)}`,
-    due && doc.business.upiId ? `Pay by UPI to ${doc.business.upiId}` : due ? "" : `Paid by ${PAYMENT_LABEL[doc.paymentMode]}`,
+    due && doc.business.upiId ? `Pay by UPI to ${doc.business.upiId}` : due ? "" : `Paid by ${paidByLabel(doc)}`,
     doc.business.footerNote,
   ]
     .filter((l, i, a) => l !== "" || a[i - 1] !== "")
@@ -59,19 +59,19 @@ async function InvoiceView({ params, searchParams }: Pick<PageProps<"/invoices/[
     <>
       <style id="page-size">{template.pageCss}</style>
       <InvoiceActions id={doc.id} templateId={template.id} paper={template.paper} slipPaper={slipPaper} isNew={isNew} shareText={shareText} phone={doc.customerPhone} hasChanges={Boolean(lastEdit)} />
-      <PaymentBar id={doc.id} status={doc.status} paymentMode={doc.paymentMode} paidAt={doc.paidAt} total={doc.total} />
+      <PaymentBar id={doc.id} status={doc.status} paymentMode={doc.paymentMode} paymentSplit={doc.paymentSplit} paidAt={doc.paidAt} total={doc.total} />
       <div className="overflow-x-auto pt-2 pb-6 print:overflow-visible print:p-0">
         <div className="relative mx-auto w-fit">
           <InvoicePaper templateId={template.id} doc={doc} qr={qr} />
           {isNew && (
             <div
               role="status"
-              aria-label={due ? "Bill saved, payment due" : `Bill saved and marked paid by ${PAYMENT_LABEL[doc.paymentMode]}`}
+              aria-label={due ? "Bill saved, payment due" : `Bill saved and marked paid by ${paidByLabel(doc)}`}
               className="no-print pointer-events-none absolute top-[14%] right-[-1.5rem] sm:right-[-3rem]"
             >
               <div className={`stamp stamp-in ${due ? "stamp-due" : ""}`}>
                 <span className="text-[2rem] font-[800] tracking-[0.08em]">{due ? "DUE" : "PAID"}</span>
-                <span className="text-[0.8125rem] font-[700] tracking-[0.06em]">{due ? formatINR(doc.total) : `BY ${PAYMENT_LABEL[doc.paymentMode].toUpperCase()}`}</span>
+                <span className="text-[0.8125rem] font-[700] tracking-[0.06em]">{due ? formatINR(doc.total) : `BY ${paidByLabel(doc, false).toUpperCase()}`}</span>
               </div>
             </div>
           )}
@@ -85,7 +85,7 @@ async function InvoiceView({ params, searchParams }: Pick<PageProps<"/invoices/[
   );
 }
 
-const statusText = (s: string) => (s.startsWith("paid:") ? `paid by ${PAYMENT_LABEL[s.slice(5) as PaymentMode] ?? "other"}` : "due");
+const statusText = (s: string, split: PaymentSplit) => (s.startsWith("paid:") ? `paid by ${paidByLabel({ paymentMode: s.slice(5) as PaymentMode, paymentSplit: split, total: 0 }) || "other"}` : "due");
 const changeText = (l: LineChange) => `${l.qty} × ${l.name}${lineDetail(l) ? ` (${lineDetail(l)})` : ""}`;
 
 /** The bill's own record of what happened to it after it was issued. Shown on screen only; it never prints. */
@@ -110,7 +110,7 @@ function BillHistory({ events, issuedAt, width }: { events: BillEvent[]; issuedA
               </>
             ) : e.type === "status" ? (
               <>
-                marked <span className={`font-[560] ${e.to === "due" ? "text-bad" : "text-good"}`}>{statusText(e.to)}</span>.
+                marked <span className={`font-[560] ${e.to === "due" ? "text-bad" : "text-good"}`}>{statusText(e.to, e.split)}</span>.
               </>
             ) : (
               <>

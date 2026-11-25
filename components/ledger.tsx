@@ -1,10 +1,11 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import type { ReactNode } from "react";
-import { formatINR, PAYMENT_LABEL, type PaymentMode, type PaymentStatus } from "@/lib/billing";
+import { formatINR, type PaymentStatus } from "@/lib/billing";
 
-export type LedgerRow = { id: string; number: string; when: string; guest: string; paymentMode: PaymentMode; status: PaymentStatus; total: number };
+/** `paidBy` is how the bill was paid, in words: "UPI", or "Cash + UPI" for a mixed payment. */
+export type LedgerRow = { id: string; number: string; when: string; guest: string; paidBy: string; status: PaymentStatus; total: number };
 
-const cols = "grid grid-cols-[1fr_auto] items-baseline gap-x-4 sm:grid-cols-[6.5rem_9.5rem_minmax(0,1fr)_6rem_7rem]";
+const cols = "grid grid-cols-[1fr_auto] items-baseline gap-x-4 sm:grid-cols-[6.5rem_9.5rem_minmax(0,1fr)_minmax(6rem,auto)_7rem]";
 
 /** Paid bills sit on a green line, due bills on a red one, so what's still owed stands out at a glance. */
 const tone: Record<PaymentStatus, string> = {
@@ -12,11 +13,11 @@ const tone: Record<PaymentStatus, string> = {
   due: "border-l-bad bg-bad/[0.08] hover:bg-bad/[0.15]",
 };
 
-function StatusPill({ status, paymentMode }: { status: PaymentStatus; paymentMode: PaymentMode }) {
+function StatusPill({ status, paidBy }: { status: PaymentStatus; paidBy: string }) {
   return status === "due" ? (
     <span className="inline-flex items-center rounded-full bg-bad px-2 py-0.5 text-[0.8125rem] leading-tight font-[650] text-bg">Due</span>
   ) : (
-    <span className="inline-flex items-center rounded-full bg-good px-2 py-0.5 text-[0.8125rem] leading-tight font-[650] text-bg">Paid, {PAYMENT_LABEL[paymentMode]}</span>
+    <span className="inline-flex items-center rounded-full bg-good px-2 py-0.5 text-[0.8125rem] leading-tight font-[650] text-bg">Paid, {paidBy}</span>
   );
 }
 
@@ -36,7 +37,7 @@ export function Ledger({ rows, footer, whenLabel = "Time" }: { rows: LedgerRow[]
           <li key={r.id} className="border-b border-line last:border-b-0">
             <Link
               href={`/invoices/${r.id}`}
-              aria-label={`Bill ${r.number}, ${r.guest}, ${formatINR(r.total)}, ${r.status === "due" ? "due" : `paid by ${PAYMENT_LABEL[r.paymentMode]}`}`}
+              aria-label={`Bill ${r.number}, ${r.guest}, ${formatINR(r.total)}, ${r.status === "due" ? "due" : `paid by ${r.paidBy}`}`}
               className={`${cols} border-l-4 py-3 pr-5 pl-4 transition-colors ${tone[r.status]}`}
             >
               <span className="num hidden text-ink-2 sm:block">{r.when}</span>
@@ -45,12 +46,12 @@ export function Ledger({ rows, footer, whenLabel = "Time" }: { rows: LedgerRow[]
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.875rem] text-ink-2 sm:hidden">
                   <span>{r.when}</span>
                   <span className="truncate">{r.guest}</span>
-                  <StatusPill status={r.status} paymentMode={r.paymentMode} />
+                  <StatusPill status={r.status} paidBy={r.paidBy} />
                 </span>
               </span>
               <span className="hidden truncate sm:block">{r.guest}</span>
               <span className="hidden sm:block">
-                <StatusPill status={r.status} paymentMode={r.paymentMode} />
+                <StatusPill status={r.status} paidBy={r.paidBy} />
               </span>
               <span className={`money text-right text-[1.125rem] ${r.status === "due" ? "text-bad" : ""}`}>{formatINR(r.total)}</span>
             </Link>

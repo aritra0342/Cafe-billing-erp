@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { UserButton } from "@clerk/nextjs";
 import { Logo } from "@/components/logo";
 import { TabBar, TabBarLinks, TopNav, TopNavLinks } from "@/components/app-nav";

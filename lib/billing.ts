@@ -4,7 +4,13 @@
 export type TaxMode = "regular" | "composition" | "unregistered";
 export type Diet = "veg" | "nonveg" | "egg";
 export type OrderType = "dine_in" | "takeaway" | "delivery";
-export type PaymentMode = "cash" | "upi" | "card" | "other";
+/** "mixed" is a bill settled partly one way and partly another, such as some cash and the rest by UPI. */
+export type PaymentMode = "cash" | "upi" | "card" | "other" | "mixed";
+/** The ways money actually arrives. A mixed bill is made up of two or more of these. */
+export type Tender = Exclude<PaymentMode, "mixed">;
+export const TENDERS: Tender[] = ["cash", "upi", "card", "other"];
+/** How much of a mixed bill came in by each tender, in rupees. Empty for a bill paid one way. */
+export type PaymentSplit = Partial<Record<Tender, number>>;
 export type DiscountType = "percent" | "flat";
 /** A bill is saved as due when the order goes to the kitchen and marked paid when the guest settles it. */
 export type PaymentStatus = "due" | "paid";
@@ -89,6 +95,8 @@ export type InvoiceDoc = {
   orderType: OrderType;
   tableNo: string;
   paymentMode: PaymentMode;
+  /** The parts of a mixed payment; {} otherwise. They add up to the total. */
+  paymentSplit: PaymentSplit;
   status: PaymentStatus;
   /** When the bill was marked paid; "" while it's due, and for bills saved before paid/due existed. */
   paidAt: string;
@@ -295,11 +303,62 @@ export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 export const FSSAI_RE = /^[0-9]{14}$/;
 
 export const ORDER_TYPE_LABEL: Record<OrderType, string> = { dine_in: "Dine-in", takeaway: "Takeaway", delivery: "Delivery" };
-export const PAYMENT_LABEL: Record<PaymentMode, string> = { cash: "Cash", upi: "UPI", card: "Card", other: "Other" };
+export const PAYMENT_LABEL: Record<PaymentMode, string> = { cash: "Cash", upi: "UPI", card: "Card", other: "Other", mixed: "Mixed" };
 export const STATUS_LABEL: Record<PaymentStatus, string> = { due: "Due", paid: "Paid" };
 
+// ---------- Mixed payments ----------
+
+/** Reads a split from the counter or from a saved bill, keeping only real, positive amounts. */
+export function cleanSplit(v: unknown): PaymentSplit {
+  const out: PaymentSplit = {};
+  if (!v || typeof v !== "object") return out;
+  for (const t of TENDERS) {
+    const paise = toPaise(Number((v as Record<string, unknown>)[t]));
+    if (Number.isFinite(paise) && paise > 0) out[t] = toRupees(paise);
+  }
+  return out;
+}
+
+export const splitTotal = (split: PaymentSplit) => toRupees(TENDERS.reduce((s, t) => s + toPaise(split[t] ?? 0), 0));
+
+type Settled = Pick<InvoiceDoc, "paymentMode" | "paymentSplit" | "total">;
+
+/** How a paid bill's total came in: one entry for a bill paid one way, one per part for a mixed bill. */
+export function tenders(doc: Settled): [Tender, number][] {
+  if (doc.paymentMode !== "mixed") return [[doc.paymentMode, doc.total]];
+  const parts = TENDERS.filter((t) => (doc.paymentSplit[t] ?? 0) > 0).map((t): [Tender, number] => [t, doc.paymentSplit[t]!]);
+  return parts.length ? parts : [["other", doc.total]];
+}
+
+const rupees = (n: number) => inr.format(n).replace(/\.00$/, "");
+
+/** "UPI" for a bill paid one way; "Cash ₹200 + UPI ₹150" for a mixed one (or "Cash + UPI" without amounts). */
+export function paidByLabel(doc: Settled, amounts = true) {
+  if (doc.paymentMode !== "mixed") return PAYMENT_LABEL[doc.paymentMode];
+  return tenders(doc)
+    .map(([t, n]) => (amounts ? `${PAYMENT_LABEL[t]} ${rupees(n)}` : PAYMENT_LABEL[t]))
+    .join(" + ");
+}
+
+/**
+ * Keeps a mixed bill's parts adding up after an edit changes its total. Cash takes the difference first
+ * (it's how change is given or the extra collected), then UPI, card and other if cash runs out.
+ */
+export function rebalanceSplit(split: PaymentSplit, total: number): PaymentSplit {
+  const paise = Object.fromEntries(TENDERS.map((t) => [t, toPaise(split[t] ?? 0)])) as Record<Tender, number>;
+  let diff = toPaise(total) - TENDERS.reduce((s, t) => s + paise[t], 0);
+  if (diff > 0) paise.cash += diff;
+  for (const t of TENDERS) {
+    if (diff >= 0) break;
+    const take = Math.min(paise[t], -diff);
+    paise[t] -= take;
+    diff += take;
+  }
+  return cleanSplit(Object.fromEntries(TENDERS.map((t) => [t, toRupees(paise[t])])));
+}
+
 /** What a bill says about payment: "Payment due" until it's settled, then how it was paid. */
-export const paymentLabel = (doc: Pick<InvoiceDoc, "status" | "paymentMode">) => (doc.status === "due" ? "Payment due" : PAYMENT_LABEL[doc.paymentMode]);
+export const paymentLabel = (doc: Settled & Pick<InvoiceDoc, "status">) => (doc.status === "due" ? "Payment due" : paidByLabel(doc));
 
 /** Lines that are the same dish made the same way, so they can be compared across two versions of a bill. */
 export const lineKey = (l: BilledLine) =>

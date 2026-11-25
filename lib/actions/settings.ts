@@ -1,6 +1,6 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { settingsChanged } from "../cache-tags";
 import { tables } from "../appwrite/server";
 import { requireUser } from "../auth";
 import { DEFAULT_SETTINGS, getSettingsFor, type CafeSettings } from "../data";
@@ -51,7 +51,7 @@ export async function saveSettings(input: CafeSettings): Promise<SettingsResult>
   const existing = await getSettingsFor(user.id);
   if (existing) await tables.settings.update(user.id, s);
   else await tables.settings.create({ ownerId: user.id, ...s }, { rowId: user.id });
-  refresh();
+  await settingsChanged();
   return { ok: true };
 }
 
@@ -61,7 +61,7 @@ export async function setDefaultTemplate(templateId: string) {
   const existing = await getSettingsFor(user.id);
   if (!existing) return;
   await tables.settings.update(user.id, { defaultTemplate: templateId });
-  refresh();
+  await settingsChanged();
 }
 
 const LOGO_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
@@ -75,6 +75,6 @@ export async function setLogo(dataUrl: string | null): Promise<{ error?: string 
   const existing = await getSettingsFor(user.id);
   if (!existing) return { error: "Save your cafe details first, then add the logo." };
   await tables.settings.update(user.id, { logo });
-  refresh();
+  await settingsChanged();
   return {};
 }

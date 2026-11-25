@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { getSettings, getTodayStats } from "@/lib/data";
-import { formatINR, formatTime, IST, PAYMENT_LABEL } from "@/lib/billing";
+import { formatINR, formatTime, IST, paidByLabel, PAYMENT_LABEL } from "@/lib/billing";
+import { getExpenses } from "@/lib/reports";
+import Link from "@/components/link";
 import { ButtonLink, EmptyState, PageHeader, Skeleton } from "@/components/ui";
 import { Ledger, LedgerTotal } from "@/components/ledger";
 import { IconPlus } from "@/components/icons";
@@ -79,7 +81,8 @@ async function SetupPrompt() {
 }
 
 async function Day() {
-  const { bills, revenue, collected, due, average, byPayment, topItems } = await getTodayStats();
+  const [{ bills, revenue, collected, due, average, byPayment, topItems }, expenses] = await Promise.all([getTodayStats(), getExpenses()]);
+  const spent = Math.round(expenses.reduce((s, e) => s + e.amount, 0) * 100) / 100;
 
   if (bills.length === 0) {
     return (
@@ -101,7 +104,7 @@ async function Day() {
             number: b.number,
             when: formatTime(b.issuedAt),
             guest: b.customerName || (b.tableNo ? `Table ${b.tableNo}` : "Walk-in"),
-            paymentMode: b.paymentMode,
+            paidBy: paidByLabel(b, false),
             status: b.status,
             total: b.total,
           }))}
@@ -146,6 +149,21 @@ async function Day() {
                 <dd className="money text-[1.125rem]">{formatINR(due.amount)}</dd>
               </div>
             )}
+            <div className="mt-1 flex items-baseline gap-2 border-t border-line pt-2">
+              <dt className="font-[560]">
+                <Link href="/expenses" className="underline decoration-line underline-offset-4 hover:decoration-ink">
+                  Expenses
+                </Link>
+              </dt>
+              <dd className="text-[0.875rem] text-ink-3">{expenses.length ? `${expenses.length} written` : "none yet"}</dd>
+              <span className="leader" aria-hidden />
+              <dd className="money text-[1.125rem]">{formatINR(spent)}</dd>
+            </div>
+            <div className="flex items-baseline gap-2 font-[600]">
+              <dt>Left after expenses</dt>
+              <span className="leader" aria-hidden />
+              <dd className="money text-[1.125rem]">{formatINR(Math.round((collected - spent) * 100) / 100)}</dd>
+            </div>
             <div className="mt-1 flex items-baseline gap-2 border-t border-line pt-2 text-ink-2">
               <dt>Average bill</dt>
               <span className="leader" aria-hidden />
@@ -167,6 +185,9 @@ async function Day() {
               </li>
             ))}
           </ol>
+          <Link href="/reports/items?period=day" className="mt-3 inline-block font-[560] text-ink-2 underline decoration-line underline-offset-4 hover:text-ink">
+            Every item sold, by date
+          </Link>
         </section>
       </aside>
     </div>

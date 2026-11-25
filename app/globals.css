@@ -340,3 +340,19 @@ dialog.sheet[open]::backdrop {
     border-radius: 0 !important;
   }
 }
+
+/* The phone's "More" list grows out of its button. */
+.more-pop {
+  animation: more-pop 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes more-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .more-pop {
+    animation: none;
+  }
+}

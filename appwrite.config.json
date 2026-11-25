@@ -416,11 +416,19 @@
             "cash",
             "upi",
             "card",
-            "other"
+            "other",
+            "mixed"
           ],
           "required": false,
           "array": false,
           "default": "cash"
+        },
+        {
+          "key": "paymentSplit",
+          "type": "varchar",
+          "size": 128,
+          "required": false,
+          "array": false
         },
         {
           "key": "templateId",
@@ -665,6 +673,117 @@
           ],
           "orders": [
             "ASC",
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "expenses",
+      "$permissions": [],
+      "databaseId": "cafe",
+      "name": "Expenses",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        {
+          "key": "ownerId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "day",
+          "type": "varchar",
+          "size": 10,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "description",
+          "type": "varchar",
+          "size": 255,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "amount",
+          "type": "double",
+          "required": true,
+          "array": false,
+          "min": 0
+        },
+        {
+          "key": "at",
+          "type": "datetime",
+          "required": true,
+          "array": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "by_day",
+          "type": "key",
+          "columns": [
+            "ownerId",
+            "day",
+            "at"
+          ],
+          "orders": [
+            "ASC",
+            "ASC",
+            "ASC"
+          ]
+        }
+      ]
+    },
+    {
+      "$id": "day_totals",
+      "$permissions": [],
+      "databaseId": "cafe",
+      "name": "Day totals",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        {
+          "key": "ownerId",
+          "type": "varchar",
+          "size": 36,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "day",
+          "type": "varchar",
+          "size": 10,
+          "required": true,
+          "array": false
+        },
+        {
+          "key": "totals",
+          "type": "varchar",
+          "size": 512,
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "items",
+          "type": "mediumtext",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "by_day",
+          "type": "unique",
+          "columns": [
+            "ownerId",
+            "day"
+          ],
+          "orders": [
             "ASC",
             "ASC"
           ]

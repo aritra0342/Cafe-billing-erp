@@ -28,7 +28,8 @@ export const InvoicesPaymentMode = {
     CASH: "cash",
     UPI: "upi",
     CARD: "card",
-    OTHER: "other"
+    OTHER: "other",
+    MIXED: "mixed"
 } as const;
 
 export type InvoicesPaymentMode = (typeof InvoicesPaymentMode)[keyof typeof InvoicesPaymentMode];
@@ -161,6 +162,7 @@ export type InvoicesCreate = {
     "orderType"?: InvoicesOrderType;
     "tableNo"?: string;
     "paymentMode"?: InvoicesPaymentMode;
+    "paymentSplit"?: string;
     "templateId"?: string;
     "lines"?: string;
     "discountType"?: InvoicesDiscountType;
@@ -194,6 +196,7 @@ export type Invoices = Models.Row & {
     "orderType"?: InvoicesOrderType;
     "tableNo"?: string;
     "paymentMode"?: InvoicesPaymentMode;
+    "paymentSplit"?: string;
     "templateId"?: string;
     "lines"?: string;
     "discountType"?: InvoicesDiscountType;
@@ -232,6 +235,36 @@ export type InvoiceHistory = Models.Row & {
     "to"?: string;
     "at": string;
     "detail"?: string;
+}
+
+export type ExpensesCreate = {
+    "ownerId": string;
+    "day": string;
+    "description": string;
+    "amount": number;
+    "at": string;
+}
+
+export type Expenses = Models.Row & {
+    "ownerId": string;
+    "day": string;
+    "description": string;
+    "amount": number;
+    "at": string;
+}
+
+export type DayTotalsCreate = {
+    "ownerId": string;
+    "day": string;
+    "totals"?: string;
+    "items"?: string;
+}
+
+export type DayTotals = Models.Row & {
+    "ownerId": string;
+    "day": string;
+    "totals"?: string;
+    "items"?: string;
 }
 
 declare const __roleStringBrand: unique symbol;
@@ -523,6 +556,7 @@ export type DatabaseTableMap = {
         "orderType"?: InvoicesOrderType;
         "tableNo"?: string;
         "paymentMode"?: InvoicesPaymentMode;
+        "paymentSplit"?: string;
         "templateId"?: string;
         "lines"?: string;
         "discountType"?: InvoicesDiscountType;
@@ -556,6 +590,7 @@ export type DatabaseTableMap = {
         "orderType"?: InvoicesOrderType;
         "tableNo"?: string;
         "paymentMode"?: InvoicesPaymentMode;
+        "paymentSplit"?: string;
         "templateId"?: string;
         "lines"?: string;
         "discountType"?: InvoicesDiscountType;
@@ -590,6 +625,7 @@ export type DatabaseTableMap = {
         "orderType"?: InvoicesOrderType;
         "tableNo"?: string;
         "paymentMode"?: InvoicesPaymentMode;
+        "paymentSplit"?: string;
         "templateId"?: string;
         "lines"?: string;
         "discountType"?: InvoicesDiscountType;
@@ -622,6 +658,7 @@ export type DatabaseTableMap = {
         "orderType"?: InvoicesOrderType;
         "tableNo"?: string;
         "paymentMode"?: InvoicesPaymentMode;
+        "paymentSplit"?: string;
         "templateId"?: string;
         "lines"?: string;
         "discountType"?: InvoicesDiscountType;
@@ -684,6 +721,70 @@ export type DatabaseTableMap = {
         "detail"?: string;
       }>, options?: { queries?: (q: QueryBuilder<InvoiceHistory>) => string[]; transactionId?: string }) => Promise<{ total: number; rows: InvoiceHistory[] }>;
       deleteMany: (options?: { queries?: (q: QueryBuilder<InvoiceHistory>) => string[]; transactionId?: string }) => Promise<{ total: number; rows: InvoiceHistory[] }>;
+    };
+    "Expenses": {
+      create: (data: {
+        "ownerId": string;
+        "day": string;
+        "description": string;
+        "amount": number;
+        "at": string;
+      }, options?: { rowId?: string; permissions?: (permission: { read: (role: RoleString) => string; write: (role: RoleString) => string; create: (role: RoleString) => string; update: (role: RoleString) => string; delete: (role: RoleString) => string }, role: { any: () => RoleString; user: (userId: string, status?: string) => RoleString; users: (status?: string) => RoleString; guests: () => RoleString; team: (teamId: string, role?: string) => RoleString; member: (memberId: string) => RoleString; label: (label: string) => RoleString }) => string[]; transactionId?: string }) => Promise<Expenses>;
+      get: (id: string) => Promise<Expenses>;
+      update: (id: string, data: Partial<{
+        "ownerId": string;
+        "day": string;
+        "description": string;
+        "amount": number;
+        "at": string;
+      }>, options?: { permissions?: (permission: { read: (role: RoleString) => string; write: (role: RoleString) => string; create: (role: RoleString) => string; update: (role: RoleString) => string; delete: (role: RoleString) => string }, role: { any: () => RoleString; user: (userId: string, status?: string) => RoleString; users: (status?: string) => RoleString; guests: () => RoleString; team: (teamId: string, role?: string) => RoleString; member: (memberId: string) => RoleString; label: (label: string) => RoleString }) => string[]; transactionId?: string }) => Promise<Expenses>;
+      delete: (id: string, options?: { transactionId?: string }) => Promise<void>;
+      list: (options?: { queries?: (q: QueryBuilder<Expenses>) => string[] }) => Promise<{ total: number; rows: Expenses[] }>;
+      createMany: (rows: Array<{
+        "ownerId": string;
+        "day": string;
+        "description": string;
+        "amount": number;
+        "at": string;
+      } & { $id?: string; $permissions?: string[] }>, options?: { transactionId?: string }) => Promise<{ total: number; rows: Expenses[] }>;
+      updateMany: (data: Partial<{
+        "ownerId": string;
+        "day": string;
+        "description": string;
+        "amount": number;
+        "at": string;
+      }>, options?: { queries?: (q: QueryBuilder<Expenses>) => string[]; transactionId?: string }) => Promise<{ total: number; rows: Expenses[] }>;
+      deleteMany: (options?: { queries?: (q: QueryBuilder<Expenses>) => string[]; transactionId?: string }) => Promise<{ total: number; rows: Expenses[] }>;
+    };
+    "Day totals": {
+      create: (data: {
+        "ownerId": string;
+        "day": string;
+        "totals"?: string;
+        "items"?: string;
+      }, options?: { rowId?: string; permissions?: (permission: { read: (role: RoleString) => string; write: (role: RoleString) => string; create: (role: RoleString) => string; update: (role: RoleString) => string; delete: (role: RoleString) => string }, role: { any: () => RoleString; user: (userId: string, status?: string) => RoleString; users: (status?: string) => RoleString; guests: () => RoleString; team: (teamId: string, role?: string) => RoleString; member: (memberId: string) => RoleString; label: (label: string) => RoleString }) => string[]; transactionId?: string }) => Promise<DayTotals>;
+      get: (id: string) => Promise<DayTotals>;
+      update: (id: string, data: Partial<{
+        "ownerId": string;
+        "day": string;
+        "totals"?: string;
+        "items"?: string;
+      }>, options?: { permissions?: (permission: { read: (role: RoleString) => string; write: (role: RoleString) => string; create: (role: RoleString) => string; update: (role: RoleString) => string; delete: (role: RoleString) => string }, role: { any: () => RoleString; user: (userId: string, status?: string) => RoleString; users: (status?: string) => RoleString; guests: () => RoleString; team: (teamId: string, role?: string) => RoleString; member: (memberId: string) => RoleString; label: (label: string) => RoleString }) => string[]; transactionId?: string }) => Promise<DayTotals>;
+      delete: (id: string, options?: { transactionId?: string }) => Promise<void>;
+      list: (options?: { queries?: (q: QueryBuilder<DayTotals>) => string[] }) => Promise<{ total: number; rows: DayTotals[] }>;
+      createMany: (rows: Array<{
+        "ownerId": string;
+        "day": string;
+        "totals"?: string;
+        "items"?: string;
+      } & { $id?: string; $permissions?: string[] }>, options?: { transactionId?: string }) => Promise<{ total: number; rows: DayTotals[] }>;
+      updateMany: (data: Partial<{
+        "ownerId": string;
+        "day": string;
+        "totals"?: string;
+        "items"?: string;
+      }>, options?: { queries?: (q: QueryBuilder<DayTotals>) => string[]; transactionId?: string }) => Promise<{ total: number; rows: DayTotals[] }>;
+      deleteMany: (options?: { queries?: (q: QueryBuilder<DayTotals>) => string[]; transactionId?: string }) => Promise<{ total: number; rows: DayTotals[] }>;
     }
   }
 };

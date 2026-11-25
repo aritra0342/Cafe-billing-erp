@@ -1,6 +1,6 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { menuChanged } from "../cache-tags";
 import { unstable_rethrow } from "next/navigation";
 import { ID } from "node-appwrite";
 import { InputFile } from "node-appwrite/file";
@@ -8,7 +8,7 @@ import { PHOTO_BUCKET, storage, tables } from "../appwrite/server";
 import { requireUser } from "../auth";
 import type { Diet, Option } from "../billing";
 import { SAMPLE_MENU } from "../sample-menu";
-import { getMenu } from "../data";
+import { getMenuFresh as getMenu } from "../data";
 import { MAX_PHOTO_BYTES, imageKind } from "../photo";
 import { MAX_SHEET_BYTES, planMenuImport, readMenuSheet, type ItemData, type MenuPlan } from "../menu-sheet";
 
@@ -48,7 +48,7 @@ export async function createCategory(name: string): Promise<Result> {
   const row = await tables.categories.create(
     { ownerId: user.id, name: clean, sortOrder: (existing.rows[0]?.sortOrder ?? 0) + 1 },
   );
-  refresh();
+  await menuChanged();
   return { ok: true, id: row.$id };
 }
 
@@ -58,7 +58,7 @@ export async function renameCategory(id: string, name: string): Promise<Result> 
   if (!clean) return { ok: false, error: "Give the category a name." };
   if (!(await ownedCategory(user.id, id))) return { ok: false, error: "Category not found." };
   await tables.categories.update(id, { name: clean });
-  refresh();
+  await menuChanged();
   return { ok: true };
 }
 
@@ -71,7 +71,7 @@ export async function moveCategory(id: string, direction: -1 | 1): Promise<Resul
   const order = all.rows.map((c) => c.$id);
   [order[i], order[j]] = [order[j], order[i]];
   await Promise.all(order.map((cid, idx) => tables.categories.update(cid, { sortOrder: idx + 1 })));
-  refresh();
+  await menuChanged();
   return { ok: true };
 }
 
@@ -83,7 +83,7 @@ export async function deleteCategory(id: string): Promise<Result> {
   await Promise.all(items.rows.map((r) => tables.items.delete(r.$id)));
   await tables.categories.delete(id);
   await deletePhotoFiles(items.rows.map((r) => r.photo));
-  refresh();
+  await menuChanged();
   return { ok: true };
 }
 
@@ -123,12 +123,12 @@ export async function saveItem(input: ItemInput): Promise<Result> {
   if (input.id) {
     if (!(await ownedItem(user.id, input.id))) return { ok: false, error: "Item not found." };
     await tables.items.update(input.id, data);
-    refresh();
+    await menuChanged();
     return { ok: true, id: input.id };
   }
   const count = await tables.items.list({ queries: (q) => [q.equal("ownerId", user.id), q.equal("categoryId", input.categoryId), q.limit(1)] });
   const row = await tables.items.create({ ownerId: user.id, sortOrder: count.total + 1, ...data });
-  refresh();
+  await menuChanged();
   return { ok: true, id: row.$id };
 }
 
@@ -136,7 +136,7 @@ export async function setItemAvailable(id: string, available: boolean): Promise<
   const user = await requireUser();
   if (!(await ownedItem(user.id, id))) return { ok: false, error: "Item not found." };
   await tables.items.update(id, { available });
-  refresh();
+  await menuChanged();
   return { ok: true };
 }
 
@@ -146,7 +146,7 @@ export async function deleteItem(id: string): Promise<Result> {
   if (!item) return { ok: false, error: "Item not found." };
   await tables.items.delete(id);
   await deletePhotoFiles([item.photo]);
-  refresh();
+  await menuChanged();
   return { ok: true };
 }
 
@@ -177,7 +177,7 @@ export async function setItemPhoto(id: string, form: FormData): Promise<Result> 
     throw e;
   }
   await deletePhotoFiles([item.photo]);
-  refresh();
+  await menuChanged();
   return { ok: true, id: fileId };
 }
 
@@ -188,7 +188,7 @@ export async function removeItemPhoto(id: string): Promise<Result> {
   if (!item.photo) return { ok: true };
   await tables.items.update(id, { photo: null as unknown as string });
   await deletePhotoFiles([item.photo]);
-  refresh();
+  await menuChanged();
   return { ok: true };
 }
 
@@ -221,7 +221,7 @@ export async function loadSampleMenu(): Promise<Result> {
       ),
     );
   }
-  refresh();
+  await menuChanged();
   return { ok: true };
 }
 
@@ -289,9 +289,9 @@ export async function applyMenuSheet(form: FormData): Promise<SheetApplied> {
     }
   } catch (e) {
     console.error("menu sheet import failed", e);
-    refresh();
+    await menuChanged();
     return { ok: false, error: "Saving stopped partway, so some changes are in and some aren't. Upload the same sheet again to finish; rows already saved won't be changed twice." };
   }
-  refresh();
+  await menuChanged();
   return { ok: true, added: ops.creates.length, changed: ops.updates.length, removed: removeMissing ? plan.missing.length : 0, categories: ops.newCategories.length };
 }

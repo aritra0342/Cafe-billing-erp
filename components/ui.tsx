@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import type { ComponentProps, ReactNode } from "react";
 import type { Diet } from "@/lib/billing";
 
@@ -75,7 +75,7 @@ export function Segmented<T extends string>({ value, onChange, options, label, c
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`press h-9 flex-1 rounded-md px-3 text-[0.9375rem] font-[560] ${value === o.value ? "bg-surface text-ink ring-1 ring-line" : "text-ink-2 hover:text-ink"}`}
+          className={`press h-9 flex-1 rounded-md px-2 text-[0.9375rem] font-[560] ${value === o.value ? "bg-surface text-ink ring-1 ring-line" : "text-ink-2 hover:text-ink"}`}
         >
           {o.label}
         </button>

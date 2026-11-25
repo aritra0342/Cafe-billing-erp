@@ -1,5 +1,5 @@
 import { allInvoices, EXPORT_LIMIT } from "@/lib/data";
-import { IST, ORDER_TYPE_LABEL, PAYMENT_LABEL, STATUS_LABEL, documentTitle, istDateKey, parseYmd, stateName } from "@/lib/billing";
+import { IST, ORDER_TYPE_LABEL, STATUS_LABEL, TENDERS, documentTitle, istDateKey, paidByLabel, parseYmd, stateName, tenders } from "@/lib/billing";
 import { toCsv } from "@/lib/csv";
 
 const HEADER = [
@@ -15,6 +15,10 @@ const HEADER = [
   "Table",
   "Status",
   "Payment mode",
+  "Paid in cash",
+  "Paid by UPI",
+  "Paid by card",
+  "Paid other",
   "Items",
   "Subtotal",
   "Discount",
@@ -39,6 +43,8 @@ export async function GET(request: Request) {
   const rows = bills.map((b) => {
     const at = new Date(b.issuedAt);
     const regular = b.taxMode === "regular";
+    // What came in by each mode; a mixed bill fills more than one column.
+    const got = new Map(b.status === "paid" ? tenders(b) : []);
     return [
       b.number,
       istDateKey(at).split("-").reverse().join("-"), // dd-mm-yyyy, as the GST portal writes dates
@@ -51,7 +57,8 @@ export async function GET(request: Request) {
       ORDER_TYPE_LABEL[b.orderType],
       b.tableNo,
       STATUS_LABEL[b.status],
-      b.status === "paid" ? PAYMENT_LABEL[b.paymentMode] : "",
+      b.status === "paid" ? paidByLabel(b, false) : "",
+      ...TENDERS.map((t) => (got.has(t) ? money(got.get(t)!) : "")),
       b.lines.reduce((s, l) => s + l.qty, 0),
       money(b.subtotal),
       money(b.discount),

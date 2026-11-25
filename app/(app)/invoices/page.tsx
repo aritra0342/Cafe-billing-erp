@@ -1,8 +1,8 @@
 import { Suspense } from "react";
-import Link from "next/link";
+import Link from "@/components/link";
 import Form from "next/form";
 import { INVOICES_PAGE_SIZE, listInvoices, summarizeInvoices, type BillFilter } from "@/lib/data";
-import { formatDate, formatINR, formatTime, istDateKey, istDayStart, parseYmd } from "@/lib/billing";
+import { formatDate, formatINR, formatTime, istDateKey, istDayStart, paidByLabel, parseYmd } from "@/lib/billing";
 import { Button, ButtonLink, EmptyState, Input, PageHeader, Skeleton, buttonClass } from "@/components/ui";
 import { Ledger } from "@/components/ledger";
 import { IconDownload, IconPlus, IconSearch } from "@/components/icons";
@@ -146,7 +146,7 @@ async function InvoiceList({ searchParams }: Pick<PageProps<"/invoices">, "searc
             number: inv.number,
             when: `${formatDate(inv.issuedAt).replace(/ \d{4}$/, "")}, ${formatTime(inv.issuedAt)}`,
             guest: inv.customerName || (inv.tableNo ? `Table ${inv.tableNo}` : "Walk-in"),
-            paymentMode: inv.paymentMode,
+            paidBy: paidByLabel(inv, false),
             status: inv.status,
             total: inv.total,
           }))}

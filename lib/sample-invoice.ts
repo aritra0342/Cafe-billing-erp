@@ -26,6 +26,7 @@ export function sampleInvoice(
     orderType: "dine_in",
     tableNo: "T4",
     paymentMode: "upi",
+    paymentSplit: {},
     status: "paid",
     paidAt: issuedAt,
     templateId: "classic",

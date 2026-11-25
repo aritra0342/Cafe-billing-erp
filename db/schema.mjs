@@ -90,7 +90,8 @@ const config = {
         vc("customerAddress", 512),
         en("orderType", ["dine_in", "takeaway", "delivery"], "dine_in"),
         vc("tableNo", 16),
-        en("paymentMode", ["cash", "upi", "card", "other"], "cash"),
+        en("paymentMode", ["cash", "upi", "card", "other", "mixed"], "cash"),
+        vc("paymentSplit", 128), // JSON: { cash, upi, card, other } amounts when paymentMode is "mixed"
         vc("templateId", 32),
         txt("lines"), // JSON snapshot of billed lines
         en("discountType", ["percent", "flat"], "flat"),
@@ -132,6 +133,24 @@ const config = {
 
       ],
       [idx("by_invoice", ["ownerId", "invoiceId", "at"])],
+    ),
+    // Money spent out of a day's collection (milk, gas, wages). `day` is the IST calendar date, YYYY-MM-DD.
+    table("expenses", "Expenses", [owner, vc("day", 10, true), vc("description", 255, true), dbl("amount", { required: true, min: 0 }), dt("at", true)], [
+      idx("by_day", ["ownerId", "day", "at"]),
+    ]),
+    // One row per café per finished day, worked out from that day's bills and expenses the first time a report
+    // needs it, so reports don't re-read every bill. The row id is derived from owner and day (see lib/reports.ts);
+    // changing a bill or expense of that day deletes the row and the next report works it out again.
+    table(
+      "day_totals",
+      "Day totals",
+      [
+        owner,
+        vc("day", 10, true),
+        vc("totals", 512), // JSON: bills, billed, collected by mode, due, expenses
+        mtxt("items"), // JSON: { [item name]: [quantity, amount] }
+      ],
+      [idx("by_day", ["ownerId", "day"], "unique")],
     ),
   ],
   buckets: [

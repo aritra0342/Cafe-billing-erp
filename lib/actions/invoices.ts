@@ -6,8 +6,16 @@ import { AppwriteException, Query } from "node-appwrite";
 import { tables } from "../appwrite/server";
 import { requireUser } from "../auth";
 import { getSettingsFor, linesRevision, toBusiness, toInvoiceDoc, toMenuItem } from "../data";
+import { dayChanged } from "../reports";
 import {
+  cleanSplit,
   computeTotals,
+  formatINR,
+  istDateKey,
+  rebalanceSplit,
+  splitTotal,
+  TENDERS,
+  type PaymentSplit,
   diffLines,
   financialYear,
   formatInvoiceNumber,
@@ -31,6 +39,8 @@ export type NewInvoiceInput = {
   orderType: OrderType;
   tableNo: string;
   paymentMode: PaymentMode;
+  /** For a mixed payment: how much came in by cash, UPI, card and other. Must add up to the bill total. */
+  paymentSplit?: PaymentSplit;
   status: PaymentStatus;
   discountType: DiscountType;
   discountValue: number;
@@ -40,14 +50,27 @@ export type NewInvoiceInput = {
   printSlip?: boolean;
 };
 
-export type EditInvoiceInput = Omit<NewInvoiceInput, "status" | "paymentMode" | "templateId" | "printSlip"> & {
+export type EditInvoiceInput = Omit<NewInvoiceInput, "status" | "paymentMode" | "paymentSplit" | "templateId" | "printSlip"> & {
   /** linesRevision() of the bill as it was when the edit was opened. */
   basedOn?: string;
 };
 
 const clip = (v: unknown, n: number) => String(v ?? "").trim().slice(0, n);
 const ORDER_TYPES = ["dine_in", "takeaway", "delivery"] as const;
-const PAYMENT_MODES = ["cash", "upi", "card", "other"] as const;
+const PAYMENT_MODES = ["cash", "upi", "card", "other", "mixed"] as const;
+
+/**
+ * Checks how a bill is being paid. A mixed payment must name amounts that add up to the bill total;
+ * if only one of them is filled in, it's simply a bill paid that way.
+ */
+function settlement(mode: unknown, split: unknown, total: number): { error: string } | { paymentMode: PaymentMode; paymentSplit: string | null } {
+  if (mode !== "mixed") return { paymentMode: PAYMENT_MODES.includes(mode as PaymentMode) ? (mode as PaymentMode) : "cash", paymentSplit: null };
+  const parts = cleanSplit(split);
+  const used = TENDERS.filter((t) => parts[t]);
+  if (splitTotal(parts) !== total) return { error: `The amounts add up to ${formatINR(splitTotal(parts))}, but the bill is ${formatINR(total)}. Change them so they match.` };
+  if (used.length < 2) return { paymentMode: used[0] ?? "cash", paymentSplit: null };
+  return { paymentMode: "mixed", paymentSplit: JSON.stringify(parts) };
+}
 
 /**
  * Turns what the counter sent into billed lines. Menu lines are re-priced from the menu on the server;
@@ -144,12 +167,15 @@ export async function createInvoice(input: NewInvoiceInput): Promise<{ error: st
   const now = new Date();
   const fy = financialYear(now);
   const status: PaymentStatus = input.status === "paid" ? "paid" : "due";
+  const paid = status === "paid" ? settlement(input.paymentMode, input.paymentSplit, totals.total) : null;
+  if (paid && "error" in paid) return paid;
   const base = {
     ownerId: user.id,
     fy,
     issuedAt: now.toISOString(),
     ...details.fields,
-    paymentMode: PAYMENT_MODES.includes(input.paymentMode) ? input.paymentMode : "cash",
+    paymentMode: paid?.paymentMode ?? ("cash" as const),
+    ...(paid?.paymentSplit ? { paymentSplit: paid.paymentSplit } : {}),
     status,
     ...(status === "paid" ? { paidAt: now.toISOString() } : {}),
     templateId: TEMPLATE_IDS.includes(input.templateId) ? input.templateId : settings.defaultTemplate,
@@ -208,7 +234,17 @@ export async function updateInvoice(id: string, input: EditInvoiceInput): Promis
   const totals = computeTotals({ lines, ...discount, taxMode: doc.taxMode, gstRate: doc.gstRate, pricesIncludeTax: doc.pricesIncludeTax });
   const { added, removed } = diffLines(doc.lines, lines);
 
+  // A paid mixed bill whose total changes keeps its parts adding up: cash takes the difference.
+  let payment: { paymentMode: PaymentMode; paymentSplit: string | null } | null = null;
+  if (doc.status === "paid" && doc.paymentMode === "mixed" && totals.total !== doc.total) {
+    const parts = rebalanceSplit(doc.paymentSplit, totals.total);
+    const used = TENDERS.filter((t) => parts[t]);
+    payment = used.length > 1 ? { paymentMode: "mixed", paymentSplit: JSON.stringify(parts) } : { paymentMode: used[0] ?? "cash", paymentSplit: null };
+  }
+
   const before = {
+    paymentMode: row.paymentMode ?? "cash",
+    paymentSplit: row.paymentSplit ?? null,
     lines: row.lines,
     customerName: row.customerName ?? "",
     customerPhone: row.customerPhone ?? "",
@@ -228,7 +264,9 @@ export async function updateInvoice(id: string, input: EditInvoiceInput): Promis
     total: doc.total,
     pricesIncludeTax: doc.pricesIncludeTax,
   };
-  await tables.invoices.update(id, { ...details.fields, lines: JSON.stringify(lines), ...discount, ...totals, pricesIncludeTax: doc.pricesIncludeTax });
+  const day = istDateKey(new Date(row.issuedAt));
+  await dayChanged(user.id, day);
+  await tables.invoices.update(id, { ...details.fields, lines: JSON.stringify(lines), ...discount, ...totals, pricesIncludeTax: doc.pricesIncludeTax, ...(payment as object) });
 
   const itemsChanged = added.length > 0 || removed.length > 0;
   if (itemsChanged || totals.total !== doc.total) {
@@ -242,37 +280,46 @@ export async function updateInvoice(id: string, input: EditInvoiceInput): Promis
       });
     } catch (e) {
       // An edit with no record is worse than no edit: put the bill back as it was.
-      await tables.invoices.update(id, before).catch(() => {});
+      await tables.invoices.update(id, before as never).catch(() => {});
       throw e;
     }
   }
+  await dayChanged(user.id, day);
   refresh();
   redirect(`/invoices/${id}${itemsChanged ? "?kot=changes" : ""}`);
 }
 
-/** Marks a due bill paid by the given mode, or a paid bill due again (to undo a wrong tap). Recorded in the bill's history. */
-export async function setInvoiceStatus(id: string, status: PaymentStatus, paymentMode?: PaymentMode) {
+/**
+ * Marks a due bill paid by the given mode, or a paid bill due again (to undo a wrong tap). Recorded in the bill's history.
+ * A mixed payment comes with its parts (so much cash, so much UPI), which must add up to the bill total.
+ */
+export async function setInvoiceStatus(id: string, status: PaymentStatus, paymentMode?: PaymentMode, paymentSplit?: PaymentSplit): Promise<{ error: string } | void> {
   const user = await requireUser();
   const row = await ownedInvoice(user.id, id);
   if (!row) return;
-  const was = { status: row.status ?? "paid", paymentMode: row.paymentMode ?? "cash", paidAt: row.paidAt ?? null };
-  const mode = paymentMode && PAYMENT_MODES.includes(paymentMode) ? paymentMode : was.paymentMode;
-  if (was.status === status && (status === "due" || mode === was.paymentMode)) return;
+  const was = { status: row.status ?? "paid", paymentMode: row.paymentMode ?? "cash", paymentSplit: row.paymentSplit ?? null, paidAt: row.paidAt ?? null };
+  const paid = status === "paid" ? settlement(paymentMode ?? was.paymentMode, paymentSplit, row.total ?? 0) : null;
+  if (paid && "error" in paid) return paid;
+  if (was.status === status && (!paid || (paid.paymentMode === was.paymentMode && paid.paymentSplit === was.paymentSplit))) return;
   const now = new Date().toISOString();
-  await tables.invoices.update(id, status === "paid" ? { status, paymentMode: mode, paidAt: now } : { status, paidAt: null as unknown as string });
+  const day = istDateKey(new Date(row.issuedAt));
+  await dayChanged(user.id, day);
+  await tables.invoices.update(id, (paid ? { status, ...paid, paidAt: now } : { status, paidAt: null }) as never);
   try {
     await tables.invoiceEvents.create({
       ownerId: user.id,
       invoiceId: id,
       type: "status",
       from: was.status === "paid" ? `paid:${was.paymentMode}` : "due",
-      to: status === "paid" ? `paid:${mode}` : "due",
+      to: paid ? `paid:${paid.paymentMode}` : "due",
       at: now,
+      ...(paid?.paymentSplit ? { detail: paid.paymentSplit } : {}),
     });
   } catch (e) {
     await tables.invoices.update(id, was as never).catch(() => {});
     throw e;
   }
+  await dayChanged(user.id, day);
   refresh();
 }
 
@@ -301,10 +348,13 @@ export async function deleteInvoice(id: string) {
   const user = await requireUser();
   const row = await ownedInvoice(user.id, id);
   if (row) {
+    const day = istDateKey(new Date(row.issuedAt));
+    await dayChanged(user.id, day);
     await tables.invoices.delete(id);
     // The history belongs to the bill; remove it with the bill.
     const events = await tables.invoiceEvents.list({ queries: (q) => [q.equal("ownerId", user.id), q.equal("invoiceId", id), q.select(["$id"]), q.limit(500)] });
     await Promise.all(events.rows.map((e) => tables.invoiceEvents.delete(e.$id)));
+    await dayChanged(user.id, day);
   }
   refresh();
   redirect("/invoices");

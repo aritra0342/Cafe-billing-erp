@@ -15,6 +15,8 @@ export const tables = {
   items: db.use("Menu items"),
   invoices: db.use("Invoices"),
   invoiceEvents: db.use("Invoice history"),
+  expenses: db.use("Expenses"),
+  dayTotals: db.use("Day totals"),
 };
 
 /** File storage, same key. The photo bucket grants no client access; photos are served through an owner-checked route. */

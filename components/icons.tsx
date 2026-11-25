@@ -123,3 +123,20 @@ export const IconDownload = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14" />
   </svg>
 );
+export const IconExpenses = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17v3" />
+    <path d="M4 7.5V17a2.5 2.5 0 0 0 2.5 2.5H20V8H6.5A2.5 2.5 0 0 1 4 7.5Z" />
+    <path d="M16 13.75h.5" />
+  </svg>
+);
+export const IconReports = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M4 20h16M7 20v-6M12 20V5M17 20v-9" />
+  </svg>
+);
+export const IconMore = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M5 12h.01M12 12h.01M19 12h.01" strokeWidth={2.75} />
+  </svg>
+);

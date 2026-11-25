@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useOptimistic, useRef, useTransition } from "react";
+import Link from "@/components/link";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { deleteInvoice, setInvoiceStatus, setInvoiceTemplate } from "@/lib/actions/invoices";
-import { formatINR, formatTime, PAYMENT_LABEL, type PaymentMode, type PaymentStatus } from "@/lib/billing";
+import { formatINR, formatTime, paidByLabel, PAYMENT_LABEL, type PaymentMode, type PaymentSplit, type PaymentStatus, type Tender } from "@/lib/billing";
+import { NEW_SPLIT, SplitFields, splitParts } from "./split-fields";
 import { TEMPLATES } from "@/lib/templates";
 import { Button, buttonClass } from "./ui";
 import { IconBack, IconEdit, IconPlus, IconPrint, IconTrash, IconWhatsApp } from "./icons";
@@ -169,39 +170,67 @@ export function InvoiceActions({
   );
 }
 
-const MODES: PaymentMode[] = ["upi", "cash", "card", "other"];
+const MODES: Tender[] = ["upi", "cash", "card", "other"];
 
-/** Due bills show in red with one tap per payment mode to settle them; paid bills show in green with how and when. */
-export function PaymentBar({ id, status, paymentMode, paidAt, total }: { id: string; status: PaymentStatus; paymentMode: PaymentMode; paidAt: string; total: number }) {
+/**
+ * Due bills show in red with one tap per payment mode to settle them; paid bills show in green with how and when.
+ * "Mixed" opens amount fields for a bill settled partly one way and partly another.
+ */
+export function PaymentBar({ id, status, paymentMode, paymentSplit, paidAt, total }: { id: string; status: PaymentStatus; paymentMode: PaymentMode; paymentSplit: PaymentSplit; paidAt: string; total: number }) {
   const [pending, start] = useTransition();
-  const [shown, show] = useOptimistic({ status, paymentMode });
-  const set = (next: PaymentStatus, mode?: PaymentMode) =>
+  const [shown, show] = useOptimistic({ status, paymentMode, paymentSplit });
+  const [splitting, setSplitting] = useState(false);
+  const [split, setSplit] = useState(NEW_SPLIT);
+  const [error, setError] = useState("");
+  const set = (next: PaymentStatus, mode?: PaymentMode, parts?: PaymentSplit) =>
     start(async () => {
-      show({ status: next, paymentMode: mode ?? paymentMode });
-      await setInvoiceStatus(id, next, mode);
+      setError("");
+      show({ status: next, paymentMode: mode ?? paymentMode, paymentSplit: parts ?? {} });
+      const r = await setInvoiceStatus(id, next, mode, parts);
+      if (r?.error) setError(r.error);
+      else setSplitting(false);
     });
+  const draft = splitParts(split, total);
 
   if (shown.status === "due") {
     return (
-      <div role="region" aria-label="Payment" className="no-print mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-bad/40 bg-bad/10 px-4 py-3">
-        <p className="text-bad">
-          <span className="text-[1.125rem] font-[700]">Due</span> <span className="money">{formatINR(total)}</span> not paid yet
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[0.9375rem] text-ink-2">Mark paid by</span>
-          {MODES.map((m) => (
-            <Button key={m} size="sm" disabled={pending} onClick={() => set("paid", m)} className="border-good/40 font-[650] text-good hover:bg-good/10">
-              {PAYMENT_LABEL[m]}
+      <div role="region" aria-label="Payment" className="no-print mb-6 rounded-xl border-2 border-bad/40 bg-bad/10 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-bad">
+            <span className="text-[1.125rem] font-[700]">Due</span> <span className="money">{formatINR(total)}</span> not paid yet
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[0.9375rem] text-ink-2">Mark paid by</span>
+            {MODES.map((m) => (
+              <Button key={m} size="sm" disabled={pending} onClick={() => set("paid", m)} className="border-good/40 font-[650] text-good hover:bg-good/10">
+                {PAYMENT_LABEL[m]}
+              </Button>
+            ))}
+            <Button size="sm" disabled={pending} aria-expanded={splitting} onClick={() => setSplitting((v) => !v)} className={`border-good/40 font-[650] hover:bg-good/10 ${splitting ? "bg-good text-bg hover:bg-good" : "text-good"}`}>
+              Mixed
             </Button>
-          ))}
+          </div>
         </div>
+        {splitting && (
+          <div className="mt-3 grid gap-3 border-t border-bad/20 pt-3 sm:grid-cols-[minmax(0,26rem)_auto] sm:items-start sm:justify-end">
+            <SplitFields total={total} value={split} onChange={setSplit} />
+            <Button variant="primary" className="sm:mt-[1.625rem] sm:h-12" disabled={pending || draft.over > 0} onClick={() => set("paid", "mixed", draft.parts)}>
+              {pending ? "Saving…" : "Mark paid"}
+            </Button>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="mt-2 text-bad">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
   return (
     <div role="region" aria-label="Payment" className="no-print mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-good/40 bg-good/10 px-4 py-3">
       <p className="text-good">
-        <span className="text-[1.125rem] font-[700]">Paid</span> by {PAYMENT_LABEL[shown.paymentMode]}
+        <span className="text-[1.125rem] font-[700]">Paid</span> by {paidByLabel({ ...shown, total })}
         {paidAt && shown.status === status ? <span className="text-ink-2"> at {formatTime(paidAt)}</span> : null}
       </p>
       <button type="button" disabled={pending} onClick={() => set("due")} className="text-[0.9375rem] text-ink-2 underline-offset-2 hover:text-bad hover:underline">

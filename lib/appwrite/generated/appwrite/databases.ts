@@ -65,6 +65,8 @@ tableIdMap["cafe"]["Menu categories"] = "categories";
 tableIdMap["cafe"]["Menu items"] = "items";
 tableIdMap["cafe"]["Invoices"] = "invoices";
 tableIdMap["cafe"]["Invoice history"] = "invoice_events";
+tableIdMap["cafe"]["Expenses"] = "expenses";
+tableIdMap["cafe"]["Day totals"] = "day_totals";
 
 const tablesWithRelationships = new Set<string>();
 

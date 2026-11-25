@@ -1,12 +1,18 @@
 import "server-only";
 import { cache } from "react";
+import { cacheLife, cacheTag } from "next/cache";
 import { createHash } from "node:crypto";
 import { tables } from "./appwrite/server";
 import { requireUser } from "./auth";
+import { menuTag, settingsTag } from "./cache-tags";
 import type { Settings, MenuItems, Invoices, QueryBuilder } from "./appwrite/generated/appwrite";
 import {
   startOfTodayIST,
   istDayStart,
+  cleanSplit,
+  tenders,
+  type PaymentSplit,
+  type Tender,
   inferPricesIncludeTax,
   parseYmd,
   type Business,
@@ -71,6 +77,14 @@ const parseOptions = (json?: string): Option[] => {
     return Array.isArray(v) ? v : [];
   } catch {
     return [];
+  }
+};
+
+export const parseSplit = (json?: string | null): PaymentSplit => {
+  try {
+    return cleanSplit(JSON.parse(json || "{}"));
+  } catch {
+    return {};
   }
 };
 
@@ -142,6 +156,7 @@ export function toInvoiceDoc(r: Invoices): InvoiceDoc {
     orderType: r.orderType ?? "dine_in",
     tableNo: r.tableNo ?? "",
     paymentMode: r.paymentMode ?? "cash",
+    paymentSplit: parseSplit(r.paymentSplit),
     // Bills from before paid/due existed were all settled at the counter.
     status: r.status ?? "paid",
     paidAt: r.paidAt ?? "",
@@ -174,20 +189,60 @@ export async function getSettingsFor(userId: string) {
   return toSettings(rows[0] ?? null); // null: not set up yet
 }
 
+/*
+ * Appwrite bills every row a query returns. The menu (often 60 to 100 rows) and the café settings change only when
+ * someone edits them, yet were read on every counter, menu and settings page render. Pages read them through these
+ * caches instead, one entry per café, tagged so the menu and settings actions clear them the moment anything changes
+ * (see lib/cache-tags.ts). The cached helpers take the user id from the exported getters below, which resolve it from
+ * the session, and stay unexported so nothing can ask for another café's data.
+ * Server actions that write keep reading fresh (getSettingsFor, getMenuFresh); bills are never cached.
+ */
+async function cachedSettings(userId: string) {
+  "use cache: remote";
+  cacheTag(settingsTag(userId));
+  cacheLife("days");
+  return getSettingsFor(userId);
+}
+
+async function cachedLogo(userId: string) {
+  "use cache: remote";
+  cacheTag(settingsTag(userId));
+  cacheLife("days");
+  const { rows } = await tables.settings.list({ queries: (q) => [q.equal("ownerId", userId), q.select(["logo"]), q.limit(1)] });
+  return rows[0]?.logo ?? "";
+}
+
+async function cachedMenu(userId: string) {
+  "use cache: remote";
+  cacheTag(menuTag(userId));
+  cacheLife("days");
+  return readMenu(userId);
+}
+
 /** The logo printed at the top of bills, as a data URL, or "" when none is uploaded. */
 export const getLogo = cache(async () => {
   const user = await requireUser();
-  const { rows } = await tables.settings.list({ queries: (q) => [q.equal("ownerId", user.id), q.select(["logo"]), q.limit(1)] });
-  return rows[0]?.logo ?? "";
+  return cachedLogo(user.id);
 });
 
 export const getSettings = cache(async () => {
   const user = await requireUser();
-  return getSettingsFor(user.id);
+  return cachedSettings(user.id);
 });
 
-export async function getMenu(): Promise<{ categories: Category[]; items: MenuItem[] }> {
+export const getMenu = cache(async () => {
   const user = await requireUser();
+  return cachedMenu(user.id);
+});
+
+/** The menu read straight from the database, for actions that change it. */
+export async function getMenuFresh() {
+  const user = await requireUser();
+  return readMenu(user.id);
+}
+
+async function readMenu(userId: string): Promise<{ categories: Category[]; items: MenuItem[] }> {
+  const user = { id: userId };
   const [cats, items] = await Promise.all([
     tables.categories.list({ queries: (q) => [q.equal("ownerId", user.id), q.orderAsc("sortOrder"), q.limit(200)] }),
     tables.items.list({ queries: (q) => [q.equal("ownerId", user.id), q.orderAsc("sortOrder"), q.limit(1000)] }),
@@ -264,7 +319,7 @@ export type ItemsChange = { added: LineChange[]; removed: LineChange[]; fromTota
 export type BillEvent =
   | { id: string; at: string; type: "layout"; from: string; to: string }
   | { id: string; at: string; type: "items"; change: ItemsChange }
-  | { id: string; at: string; type: "status"; from: string; to: string };
+  | { id: string; at: string; type: "status"; from: string; to: string; split: PaymentSplit };
 
 const parseChange = (json?: string | null): ItemsChange => {
   try {
@@ -284,11 +339,12 @@ export async function getInvoiceHistory(invoiceId: string): Promise<BillEvent[]>
   return res.rows.map((r): BillEvent => {
     const type = r.type ?? "layout";
     if (type === "items") return { id: r.$id, at: r.at, type, change: parseChange(r.detail) };
+    if (type === "status") return { id: r.$id, at: r.at, type, from: r.from ?? "", to: r.to ?? "", split: parseSplit(r.detail) };
     return { id: r.$id, at: r.at, type, from: r.from ?? "", to: r.to ?? "" };
   });
 }
 
-export type TodayBill = { id: string; number: string; issuedAt: string; customerName: string; tableNo: string; paymentMode: PaymentMode; status: PaymentStatus; total: number };
+export type TodayBill = { id: string; number: string; issuedAt: string; customerName: string; tableNo: string; paymentMode: PaymentMode; paymentSplit: PaymentSplit; status: PaymentStatus; total: number };
 
 const addMoney = (a: number, b: number) => Math.round((a + b) * 100) / 100;
 
@@ -301,7 +357,7 @@ export const getTodayStats = cache(async () => {
       q.equal("ownerId", user.id),
       q.greaterThanEqual("issuedAt", since),
       q.orderDesc("issuedAt"),
-      q.select(["$id", "number", "issuedAt", "customerName", "tableNo", "paymentMode", "status", "total", "lines"]),
+      q.select(["$id", "number", "issuedAt", "customerName", "tableNo", "paymentMode", "paymentSplit", "status", "total", "lines"]),
       q.limit(5000),
     ],
   });
@@ -312,16 +368,20 @@ export const getTodayStats = cache(async () => {
     customerName: r.customerName ?? "",
     tableNo: r.tableNo ?? "",
     paymentMode: r.paymentMode ?? "cash",
+    paymentSplit: parseSplit(r.paymentSplit),
     status: r.status ?? "paid",
     total: r.total ?? 0,
   }));
   const revenue = bills.reduce((s, b) => addMoney(s, b.total), 0);
   const paid = bills.filter((b) => b.status === "paid");
   const due = bills.filter((b) => b.status === "due");
-  const byPayment = new Map<PaymentMode, { count: number; amount: number }>();
+  // A mixed bill adds each of its parts to that part's own line, so cash here is the cash that reached the drawer.
+  const byPayment = new Map<Tender, { count: number; amount: number }>();
   for (const b of paid) {
-    const e = byPayment.get(b.paymentMode) ?? { count: 0, amount: 0 };
-    byPayment.set(b.paymentMode, { count: e.count + 1, amount: addMoney(e.amount, b.total) });
+    for (const [tender, amount] of tenders(b)) {
+      const e = byPayment.get(tender) ?? { count: 0, amount: 0 };
+      byPayment.set(tender, { count: e.count + 1, amount: addMoney(e.amount, amount) });
+    }
   }
   const counts = new Map<string, number>();
   for (const r of res.rows) {
